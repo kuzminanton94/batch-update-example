@@ -40,7 +40,8 @@ class BatchUpdateService(
     fun update(
         strategy: BatchUpdateStrategyType,
         records: List<Pair<Long, String>>,
+        shouldReturnGeneratedValues: Boolean = false,
     ) {
-        strategies[strategy]!!.update(records)
+        strategies[strategy]!!.update(records, shouldReturnGeneratedValues)
     }
 }

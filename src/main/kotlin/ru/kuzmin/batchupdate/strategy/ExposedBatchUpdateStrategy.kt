@@ -9,7 +9,10 @@ import ru.kuzmin.BatchUpdateTable
 class ExposedBatchUpdateStrategy(
     private val database: Database,
 ) : BatchUpdateStrategy {
-    override fun update(records: List<Pair<Long, String>>) {
+    override fun update(
+        records: List<Pair<Long, String>>,
+        shouldReturnGeneratedValues: Boolean,
+    ) {
         transaction(database) {
             val statement = BatchUpdateStatement(BatchUpdateTable)
             records.forEach {

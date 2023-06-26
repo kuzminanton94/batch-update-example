@@ -8,7 +8,8 @@ import ru.kuzmin.BatchUpdateTable
 class OneTransactionBatchUpdateStrategy(
     private val database: Database,
 ) : BatchUpdateStrategy {
-    override fun update(records: List<Pair<Long, String>>) {
+    override fun update(records: List<Pair<Long, String>>,
+                        shouldReturnGeneratedValues: Boolean) {
         transaction(database) {
             records.forEach {
                 BatchUpdateTable.update({ BatchUpdateTable.id eq it.first }) { statement ->

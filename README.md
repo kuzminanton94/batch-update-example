@@ -39,4 +39,28 @@ Average insert rps = 85 000
 
 ### Conclusion
 
-Update with temporal table asymptotically tends to the data insertion rate 
+Update with temporal table asymptotically tends to the data insertion rate
+
+## 3. Correlation with batch insert flags
+
+Total rows = 200 000
+Updated rows = 20 000
+
+| reWriteBatchedInserts | shouldReturnGeneratedValues | insert throughput | exposed bulk update | temporal table      |
+|-----------------------|-----------------------------|-------------------|---------------------|---------------------|
+| false                 | true                        | 36 330            | 26 109              | 28 901 (+ 10%)      |
+| false                 | false                       | 40 700            | 28 050              | 36 630              |
+| true                  | true                        | 36 390            | 27 739              | 31 897              |
+| true                  | false                       | 91 491            | **28 169**          | **62 695** (+ 122%) |
+
+### Conclusion
+
+If reWriteBatchedInserts is enabled in JDBC driver and shouldReturnGeneratedValues is false,
+then bulk update performance with temporal table much better than bulk update with exposed.
+Otherwise, they are approximately close.
+
+#### Links
+
+https://jdbc.postgresql.org/documentation/use/
+
+https://github.com/JetBrains/Exposed/wiki/DSL#batch-insert

@@ -113,6 +113,69 @@ class BatchUpdateTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource(
+        textBlock = """
+        false, true
+        false, false
+        true, true
+        true, false
+        
+        """,
+    )
+    fun performance_test(
+        reWriteBatchedInserts: Boolean,
+        shouldReturnGeneratedValues: Boolean,
+    ) {
+        val insertRecordsCount = 200000
+        val updateRecordsCount = 20000
+        val rpsStats = mutableMapOf<BatchUpdateStrategyType, Pair<Double, Double>>()
+        for (updateStrategy in BatchUpdateStrategyType.values()) {
+            createPostgres().use {
+                it.start()
+
+                val database = createDatabase(it, reWriteBatchedInserts)
+                val batchUpdateService = BatchUpdateService(database)
+
+                createMainTable(database)
+
+                val records = createTestData(insertRecordsCount)
+                val recordsToUpdate = createTestDataToUpdate(updateRecordsCount, records)
+
+                val insertDuration = withTimer { batchUpdateService.insert(records, shouldReturnGeneratedValues) }
+                val updateDuration = withTimer {
+                    batchUpdateService.update(
+                        updateStrategy,
+                        recordsToUpdate,
+                        shouldReturnGeneratedValues,
+                    )
+                }
+
+                val insertRps = calculateRps(insertRecordsCount, insertDuration)
+                val updateRps = calculateRps(updateRecordsCount, updateDuration)
+                rpsStats[updateStrategy] = insertRps to updateRps
+            }
+        }
+
+        println(
+            """
+                |total records=$insertRecordsCount
+                |updated records=$updateRecordsCount
+                |reWriteBatchedInserts=$reWriteBatchedInserts
+                |shouldReturnGeneratedValues=$shouldReturnGeneratedValues
+            """.trimMargin(),
+        )
+        for (entry in rpsStats.entries) {
+            println(
+                """
+                    |${entry.key}:
+                    |  insert=${formatRps(entry.value.first)} rps
+                    |  update=${formatRps(entry.value.second)} rps
+                """.trimMargin(),
+            )
+        }
+    }
+
     private fun createPostgres(): PostgreSQLContainer<*> =
         PostgreSQLContainer(DockerImageName.parse("postgres"))
             .withUsername("flyway")
@@ -120,14 +183,17 @@ class BatchUpdateTest {
             .withDatabaseName("flyway_demo")
             .waitingFor(Wait.forListeningPort())
 
-    private fun createDatabase(container: PostgreSQLContainer<*>) = Database.connect(
+    private fun createDatabase(
+        container: PostgreSQLContainer<*>,
+        reWriteBatchedInserts: Boolean = true,
+    ) = Database.connect(
         HikariDataSource().also {
             it.jdbcUrl = container.jdbcUrl
             it.username = container.username
             it.password = container.password
             it.dataSourceProperties.setProperty("prepareThreshold", "0")
             it.dataSourceProperties.setProperty("preparedStatementCacheQueries", "0")
-            it.dataSourceProperties.setProperty("reWriteBatchedInserts", "true")
+            it.dataSourceProperties.setProperty("reWriteBatchedInserts", reWriteBatchedInserts.toString())
         },
     )
 

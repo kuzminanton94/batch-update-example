@@ -1,6 +1,5 @@
 package ru.kuzmin.batchupdate.strategy
 
-import ru.kuzmin.BatchUpdateTable
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.Column
@@ -9,11 +8,15 @@ import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import ru.kuzmin.BatchUpdateTable
 
 class TempTableBatchUpdateStrategy(
     private val database: Database,
 ) : BatchUpdateStrategy {
-    override fun update(records: List<Pair<Long, String>>) {
+    override fun update(
+        records: List<Pair<Long, String>>,
+        shouldReturnGeneratedValues: Boolean,
+    ) {
         transaction(database) {
             execInBatch(
                 listOf(
@@ -31,7 +34,7 @@ class TempTableBatchUpdateStrategy(
 
             TempBatchUpdateTable.batchInsert(
                 data = records,
-                shouldReturnGeneratedValues = false
+                shouldReturnGeneratedValues = shouldReturnGeneratedValues,
             ) {
                 this[TempBatchUpdateTable.id] = it.first
                 this[TempBatchUpdateTable.data] = it.second
