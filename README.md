@@ -11,7 +11,10 @@ Total records count to insert 300 000.
 
 # Batch update
 
-## 1. Correlation with size of the table (updated rows = 10 000, average insert rps = 85 000)
+## 1. Correlation with size of the table
+
+Updated rows = 10 000
+Average insert rps = 85 000
 
 | total count | separate transaction | one transaction | exposed bulk update | temporal table |
 |-------------|----------------------|-----------------|---------------------|----------------|
@@ -23,7 +26,10 @@ Total records count to insert 300 000.
 
 Update throughput doesn't depend on size of the table.
 
-## 2. Correlation with size of the updated data (total rows = 200 000, average insert rps = 85 000)
+## 2. Correlation with size of the updated data
+
+Total rows = 200 000
+Average insert rps = 85 000
 
 | updated count | separate transaction | one transaction | exposed bulk update | temporal table  |
 |---------------|----------------------|-----------------|---------------------|-----------------|
