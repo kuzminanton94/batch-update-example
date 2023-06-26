@@ -5,15 +5,20 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.utility.DockerImageName
 import ru.kuzmin.batchupdate.BatchUpdateService
 import ru.kuzmin.batchupdate.strategy.BatchUpdateStrategyType
 import ru.kuzmin.utils.Timer.withTimer
+import java.text.DecimalFormat
 import java.util.Random
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class BatchUpdateTest {
 
@@ -23,7 +28,9 @@ class BatchUpdateTest {
         val updateRecordsCount = 5
 
         for (updateStrategy in BatchUpdateStrategyType.values()) {
-            startPostgres().use {
+            createPostgres().use {
+                it.start()
+
                 val database = createDatabase(it)
                 val batchUpdateService = BatchUpdateService(database)
 
@@ -58,55 +65,60 @@ class BatchUpdateTest {
         }
     }
 
-    @Test
-    fun performance_test() {
-        val totalRecordsCount = 200000
-        val updateRecordsCount = 10000
+    @ParameterizedTest
+    @CsvSource(
+        textBlock = """
+        200000, 50000
+        """,
+    )
+    fun performance_test(insertRecordsCount: Int, updateRecordsCount: Int) {
+        for (i in 1..2) {
+            val rpsStats = mutableMapOf<BatchUpdateStrategyType, Pair<Double, Double>>()
+            for (updateStrategy in listOf(BatchUpdateStrategyType.TEMP_TABLE)) {
+                createPostgres().use {
+                    it.start()
 
-        val stats = mutableMapOf<BatchUpdateStrategyType, Pair<Duration, Duration>>()
-        for (updateStrategy in BatchUpdateStrategyType.values()) {
-            startPostgres().use {
-                val database = createDatabase(it)
-                val batchUpdateService = BatchUpdateService(database)
+                    val database = createDatabase(it)
+                    val batchUpdateService = BatchUpdateService(database)
 
-                createMainTable(database)
+                    createMainTable(database)
 
-                val records = createTestData(totalRecordsCount)
-                val recordsToUpdate = createTestDataToUpdate(updateRecordsCount, records)
+                    val records = createTestData(insertRecordsCount)
+                    val recordsToUpdate = createTestDataToUpdate(updateRecordsCount, records)
 
-                val insertDuration = withTimer { batchUpdateService.insert(records) }
-                val updateDuration = withTimer { batchUpdateService.update(updateStrategy, recordsToUpdate) }
-                stats[updateStrategy] = insertDuration to updateDuration
+                    val insertDuration = withTimer { batchUpdateService.insert(records) }
+                    val updateDuration = withTimer { batchUpdateService.update(updateStrategy, recordsToUpdate) }
+
+                    val insertRps = calculateRps(insertRecordsCount, insertDuration)
+                    val updateRps = calculateRps(updateRecordsCount, updateDuration)
+                    rpsStats[updateStrategy] = insertRps to updateRps
+                }
             }
-        }
 
-        println("totalSize=$totalRecordsCount, updateSize=$updateRecordsCount")
-        for (entry in stats.entries) {
-            println("strategy=${entry.key}, insert=${entry.value.first}, update=${entry.value.second}")
+            println(
+                """
+                |total records=$insertRecordsCount
+                |updated records=$updateRecordsCount
+                """.trimMargin(),
+            )
+            for (entry in rpsStats.entries) {
+                println(
+                    """
+                    |${entry.key}:
+                    |  insert=${formatRps(entry.value.first)} rps
+                    |  update=${formatRps(entry.value.second)} rps
+                    """.trimMargin(),
+                )
+            }
         }
     }
 
-    private fun startPostgres(): PostgreSQLContainer<*> {
-        val postgres = PostgreSQLContainer(DockerImageName.parse("postgres:alpine"))
+    private fun createPostgres(): PostgreSQLContainer<*> =
+        PostgreSQLContainer(DockerImageName.parse("postgres"))
             .withUsername("flyway")
             .withPassword("flyway")
             .withDatabaseName("flyway_demo")
-        postgres.start()
-
-        val database = Database.connect(url = postgres.jdbcUrl, user = postgres.username, password = postgres.password)
-
-        var started = false
-        while (!started) {
-            try {
-                transaction(database) { exec("select 1;") }
-                started = true
-            } catch (_: Exception) {
-                Thread.sleep(1000)
-            }
-        }
-
-        return postgres
-    }
+            .waitingFor(Wait.forListeningPort())
 
     private fun createDatabase(container: PostgreSQLContainer<*>) = Database.connect(
         HikariDataSource().also {
@@ -114,6 +126,8 @@ class BatchUpdateTest {
             it.username = container.username
             it.password = container.password
             it.dataSourceProperties.setProperty("prepareThreshold", "0")
+            it.dataSourceProperties.setProperty("preparedStatementCacheQueries", "0")
+            it.dataSourceProperties.setProperty("reWriteBatchedInserts", "true")
         },
     )
 
@@ -157,4 +171,13 @@ class BatchUpdateTest {
         }
         return recordsToUpdate
     }
+
+    private fun calculateRps(
+        count: Int,
+        duration: Duration,
+    ) = count.toDouble() / (duration.inWholeMilliseconds.toDouble() / 1.seconds.inWholeMilliseconds)
+
+    private fun formatRps(
+        value: Double,
+    ) = DecimalFormat("#.00").format(value)
 }

@@ -29,7 +29,10 @@ class TempTableBatchUpdateStrategy(
                 ),
             )
 
-            TempBatchUpdateTable.batchInsert(records) {
+            TempBatchUpdateTable.batchInsert(
+                data = records,
+                shouldReturnGeneratedValues = false
+            ) {
                 this[TempBatchUpdateTable.id] = it.first
                 this[TempBatchUpdateTable.data] = it.second
             }

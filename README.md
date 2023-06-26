@@ -1,39 +1,36 @@
-### Changing updateSize
+# Batch insert
 
-##### totalSize=200000, updateSize=5000
-1. strategy=SEPARATE_TRANSACTION, insert=7.747170084s, update=9.692075166s
-2. strategy=ONE_TRANSACTION, insert=7.708564834s, update=3.047392458s
-3. strategy=EXPOSED, insert=6.890814541s, update=264.751542ms
-4. strategy=TEMP_TABLE, insert=6.842681709s, update=229.193667ms
+Total records count to insert 300 000.
 
-##### totalSize=200000, updateSize=10000
-1. strategy=SEPARATE_TRANSACTION, insert=7.829496584s, update=14.451975958s
-2. strategy=ONE_TRANSACTION, insert=6.848157458s, update=5.401840875s
-3. strategy=EXPOSED, insert=6.666469292s, update=557.208375ms
-4. strategy=TEMP_TABLE, insert=6.975928750s, update=404.143416ms
+| reWriteBatchedInserts | shouldReturnGeneratedValues | Throughput           |
+|-----------------------|-----------------------------|----------------------|
+| false                 | true                        | 49 929               |
+| true                  | true                        | 50 731      (+ 1%)   |
+| false                 | false                       | 64 425      (+ 27%)  |
+| **true**              | **false**                   | **238 133** (+ 270%) |
 
-##### totalSize=200000, updateSize=20000
-1. strategy=SEPARATE_TRANSACTION, insert=6.953598584s, update=33.099096s
-2. strategy=ONE_TRANSACTION, insert=7.329123250s, update=12.021460209s
-3. strategy=EXPOSED, insert=6.901293666s, update=1.020147416s
-4. strategy=TEMP_TABLE, insert=6.893988208s, update=832.661750ms
+# Batch update
 
-### Changing totalSize
+## 1. Correlation with size of the table (updated rows = 10 000, average insert rps = 85 000)
 
-##### totalSize=50000, updateSize=10000
-1. strategy=SEPARATE_TRANSACTION, insert=2.358904291s, update=15.848161625s
-2. strategy=ONE_TRANSACTION, insert=1.707492250s, update=5.537854625s
-3. strategy=EXPOSED, insert=1.617163041s, update=493.266166ms
-4. strategy=TEMP_TABLE, insert=1.799504292s, update=403.157125ms
+| total count | separate transaction | one transaction | exposed bulk update | temporal table |
+|-------------|----------------------|-----------------|---------------------|----------------|
+| 50 000      | 673                  | 2 082           | 28 901              | 53 475         |
+| 100 000     | 664                  | 1 891           | 22 573              | 55 555         |
+| 200 000     | 620                  | 1 770           | 27 027              | 54 054         |
 
-##### totalSize=100000, updateSize=10000
-1. strategy=SEPARATE_TRANSACTION, insert=4.140753084s, update=17.811299208s
-2. strategy=ONE_TRANSACTION, insert=3.502762083s, update=7.319330417s
-3. strategy=EXPOSED, insert=3.672182625s, update=506.451083ms
-4. strategy=TEMP_TABLE, insert=3.683274708s, update=389.385125ms
+### Conclusion
 
-##### totalSize=200000, updateSize=10000
-1. strategy=SEPARATE_TRANSACTION, insert=7.829496584s, update=14.451975958s
-2. strategy=ONE_TRANSACTION, insert=6.848157458s, update=5.401840875s
-3. strategy=EXPOSED, insert=6.666469292s, update=557.208375ms
-4. strategy=TEMP_TABLE, insert=6.975928750s, update=404.143416ms
+Update throughput doesn't depend on size of the table.
+
+## 2. Correlation with size of the updated data (total rows = 200 000, average insert rps = 85 000)
+
+| updated count | separate transaction | one transaction | exposed bulk update | temporal table  |
+|---------------|----------------------|-----------------|---------------------|-----------------|
+| 5 000         | 611                  | 1 913           | 25 380              | 34 013          |
+| 10 000        | 655                  | 1 791           | 25 641              | 48 543          |
+| 20 000        | 592                  | 1 714 (+ 189%)  | 27 739 (+ 1 518%)   | 65 359 (+ 135%) |
+
+### Conclusion
+
+Update with temporal table asymptotically tends to the data insertion rate 
